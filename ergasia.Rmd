@@ -1,0 +1,301 @@
+---
+title: "ergasia1"
+author: "Sousanis Andreas"
+date: "2024-04-19"
+output: html_document
+---
+
+```{r}
+#install.packages("survminer")
+#install.packages("survival")
+library(survival)
+library(survminer)
+library(ggplot2)
+library(gridExtra)
+library(fitdistrplus)
+library(MASS)
+data<- cancer
+summary(data)
+cancer$status<- ifelse(cancer$status == 1, 0, 1)
+print(cancer)
+```
+
+Το dataset "lung cancer" περιλαμβάνει πληροφορίες για ασθενείς με καρκίνο του πνεύμονα. Καταγράφονται ηλικία, φύλο, αξιολόγηση από τον ιατρό και τον ασθενή για την απόδοση και άλλοι παράγοντες όπως ο χρόνος επιβίωσης και η κατάσταση (επιζών/νεκρός). Τα δεδομένα παρέχουν πληροφορίες για τους παράγοντες που επηρεάζουν την επιβίωση και την ποιότητα ζωής των ασθενών.
+Loprinzi CL. Laurie JA. Wieand HS. Krook JE. Novotny PJ. Kugler JW. Bartel J. Law M. Bateman M. Klatt NE. et al. Prospective evaluation of prognostic variables from patient-completed questionnaires. North Central Cancer Treatment Group. Journal of Clinical Oncology. 12(3):601-7, 1994.
+
+Εύρος και μέσος όρος για κάθε μεταβλητή στο dataset "lung":
+
+Η μεταβλητή inst είναι κατηγορική η οποία δηλώνει απο ποιό ινστιτούτο διαγνώσθηκε ο κάθε ασθενής.Δεν χρειάζεται περεταίρω ανάλυση.
+
+ Ηλικία (age):
+ Εύρος: 39 έως 82
+ Μέσος όρος:  62
+
+ Φύλο (sex):
+ Οι τιμές είναι 1 για άνδρες και 2 για γυναίκες.
+
+ ECOG (ph.ecog):
+ Εύρος: 0 έως 4
+ 0 (0=asymptomatic): Ο ασθενής είναι ασυμπτωματικός και δεν αντιμετωπίζει καμία δυσκολία στις καθημερινές του δραστηριότητες.
+
+ 1 (1= symptomatic but completely ambulatory): Ο ασθενής είναι συμπτωματικός, αλλά είναι πλήρως ικανός να εκτελέσει καθημερινές δραστηριότητες χωρίς βοήθεια.
+
+ 2 (2= in bed <50% of the day): Ο ασθενής περνά λιγότερο από το 50% της ημέρας στο κρεβάτι.
+
+ 3 (3= in bed > 50% of the day but not bedbound): Ο ασθενής περνά περισσότερο από το 50% της ημέρας στο κρεβάτι, αλλά δεν είναι πλήρως ακίνητος στο κρεβάτι.
+
+ 4 (4 = bedbound): Ο ασθενής είναι πλήρως ακίνητος και περνά τον μεγαλύτερο μέρος της ημέρας στο κρεβάτι.
+ Μέσος όρος: 0.9515
+
+ ph.karno:
+ Εύρος: 50 έως 100
+ Μέσος όρος: 81.94
+
+ pat.karno:
+ Εύρος: 30 έως 100
+ Μέσος όρος: περίπου 79.96
+
+ Θερμίδες καταναλωμένες στα γεύματα (meal.cal):
+ Εύρος: 96 έως 2600
+ Μέσος όρος:928.8
+
+ Απώλεια βάρους (wt.loss):
+ Εύρος: -24 έως 68 (αρνητική τιμή υποδεικνύει αύξηση βάρους)
+ Μέσος όρος:9.832
+
+ Σημείωση: Οι τιμές NA (Not Available) αντιπροσωπεύουν τα δεδομένα που λείπουν και δεν συμπεριλαμβάνονται στους υπολογισμούς.
+
+
+```{r}
+percentage_male <- sum(data$sex == "1") / nrow(data) * 100
+percentage_female <- sum(data$sex == "2") / nrow(data) * 100
+barplot(c(percentage_male, percentage_female), 
+        names.arg = c("Άνδρες", "Γυναίκες"), 
+        ylab = "Ποσοστό (%)",
+        main = "Ποσοστό Άνδρων και Γυναικών στο Δείγμα",
+        border = "black", 
+        width = 0.8,
+        ylim = c(0, max(c(percentage_male, percentage_female)) * 1.1), # Ρύθμιση του ορίου           του άξονα y
+        col = "red" 
+        )
+print(percentage_male)
+```
+
+
+
+```{r}
+#Διακύμανση Ηλικίας
+ ggplot(data, aes(x = age)) +
+  geom_histogram(binwidth = 4) +
+  labs(title = "Histogram of Age", x = "Age", y = "Frequency")
+
+```
+Παρατηρούμε οτι το σχήμα μας δεν είναι συμμετρικό στις ηλικίες 37 εως 53 έχουμε μικρό αριθμό ασθενών, όπως αντίστοιχα και στις ηλικίες 76 και άνω.Αντίθετα παρατηρούμε οτι το μεγαλύτερο πλήθος ασθενών κυμαίνεται ανάμεσα στα έτη 53 και 76 με τους περισσότερους ασθενείς (22) να είναι στην ηλικία των 69 ετών(κορυφή)
+```{r}
+count_death_2 <- sum(data$status == 2)
+count_death_1 <- sum(data$status == 1)
+
+barplot(c(count_death_1, count_death_2), 
+        names.arg = c("censored (1)", "Not censored (2)"), 
+        ylab = "Number of Observations",
+        main = "Number of censored and not censored observations",
+        col = c("red", "green"),
+        border = "blue",
+        ylim = c(1, max(count_death_1, count_death_2) * 1.1)
+        )
+
+```
+Οι αποκομμένες παρατηρήσεις είναι όσοι απέτυχαν μέχρι το τέλος της έρευνας.
+
+```{r}
+#Kaplan-Meier
+km <- survfit(Surv( time , status )~ 1, data = cancer )
+ggsurvplot ( km, data = cancer )
+summary(km)
+km$surv
+
+
+```
+Στο παραπάνω γράφημα βλέπουμε οτι όσο περνάει ο χρόνος οι πιθανότητες επιβίωσης μειώνονται.
+```{r}
+#Kaplan-Meier
+km <- survfit(Surv( time , status )~sex, data = cancer )
+ggsurvplot ( km, data = cancer,conf.int = TRUE )
+summary(km)
+km$surv
+```
+Όπως παρατηρώ στο παραπάνω γράφημα υπάρχουν διαφορές ανάλογα με το φύλο στη πιθανότητα επιβίωσης όσο περνάει ο χρόνος.
+```{r}
+# Δημιουργία του survival object για τη μεταβλητή 'sex'
+survsex <- Surv(cancer$time/365, cancer$status)
+
+km_1 <- survfit( survsex ~ cancer$sex, data = cancer,conf.type = "log-log") 
+
+logrank_test <- survdiff(survsex ~ sex, data = cancer, rho=0)
+print(logrank_test)
+```
+Παρατηρώ οτι το p-value είναι 0.001 άρα απορρίπτω την H0:Δεν διαφέρει ο χρόνος επιβίωσης έναντι της Η1:Διαφέρει ο χρόνος επιβίωσης.
+```{r}
+
+data(cancer , package = "survival")
+cancer$status<- ifelse(cancer$status == 1, 0, 1)
+
+
+log_Lik_Weib <- function(par, dataT,dataD){
+  shape <- par[1]
+  scale <- par[2]
+  x <- dataT
+  d <- dataD
+  loglik <-  sum(d*(-(x**shape/scale**shape) - log(scale) +log(shape) + (-1 + shape)*(-log(scale) + log(x)))+(1-d)*(-(x**shape/scale**shape)))
+  return(-loglik)
+}
+
+optim(c(1,400),log_Lik_Weib,dataT=cancer$time, dataD=cancer$status)
+
+```
+
+```{r}
+cmx<-coxph(Surv(cancer$time,cancer$status)~.,data=cancer)
+summary(cmx)
+ggforest(cmx,data=cancer)
+```
+Στατιστικά σημαντικές φαίνεται να είναι οι μεταβλητές inst, sex,ph.ecog,ph.karno,wt.loss. Eπειδή η εκτίμηση του συντελεστή της μεταβλητής inst είναι (-0.03037) αρνητική, έχουμε
+ότι κάθε μοναδιαία αύξηση της μεταβλητής αυτής, δεδομένου ότι οι υπόλοιπες συμμεταβλητές παραμένουν
+σταθερές, συνεπάγεται μείωση του κινδύνου κατά έναν συντελεστή της τάξης του 0.9701.Η εκτίμηση του συντελεστή της μεταβλητής sex είναι (-0.5666) αρνητική, έχουμε
+ότι κάθε μοναδιαία αύξηση της μεταβλητής αυτής, δεδομένου ότι οι υπόλοιπες συμμεταβλητές παραμένουν
+σταθερές, συνεπάγεται μείωση του κινδύνου κατά έναν συντελεστή της τάξης του 0.5674.Η εκτίμηση του συντελεστή της μεταβλητής ph.ecog είναι(0.9074) θετική, έχουμε
+ότι κάθε μοναδιαία αύξηση της μεταβλητής αυτής, δεδομένου ότι οι υπόλοιπες συμμεταβλητές παραμένουν
+σταθερές, συνεπάγεται αύξηση του κινδύνου κατά έναν συντελεστή της τάξης του 2.4778.Η εκτίμηση του συντελεστή της μεταβλητής ph.karno είναι(0.02658) θετική, έχουμε
+ότι κάθε μοναδιαία αύξηση της μεταβλητής αυτής, δεδομένου ότι οι υπόλοιπες συμμεταβλητές παραμένουν
+σταθερές, συνεπάγεται αύξηση του κινδύνου κατά έναν συντελεστή της τάξης του 2.4778 και τέλος η εκτίμηση του συντελεστή της μεταβλητής wt.loss είναι(-0.01671) αρνητική, έχουμε
+ότι κάθε μοναδιαία αύξηση της μεταβλητής αυτής, δεδομένου ότι οι υπόλοιπες συμμεταβλητές παραμένουν
+σταθερές, συνεπάγεται μείωση του κινδύνου κατά έναν συντελεστή της τάξης του 0.9834.
+Τέλος παρατηρούμε οτι και οι τρείς έλεγχοι το Likelihood ratio test,Wald test,Score (logrank) test τα οποία ελέγχουν τη μηδενική υπόθεση ότι όλοι οι
+συντελεστές βi είναι μηδέν έναντι της εναλλακτικής, ότι υπάρχει τουλάχιστον ένας συντελεστής διαφορετικός
+του μηδενός.Kαι οι τρεις έλεγχοι
+συμφωνούν στην απόρριψη, σε όλα τα συνήθη επίπεδα σημαντικότητας, της μηδενικής υπόθεσης, αφού οι
+p-value τιμές τους είναι εξαιρετικά μικρές.
+
+```{r}
+cancer_nomissing<- na.omit(cancer)
+cmxx<-coxph(Surv(cancer_nomissing$time,cancer_nomissing$status)~.,data = cancer_nomissing)
+library(MASS)
+All_cox <- coxph(Surv(cancer_nomissing$time,cancer_nomissing$status) ~ . , data=cancer_nomissing)
+fit0 = coxph(Surv(cancer_nomissing$time, cancer_nomissing$status) ~ 1, data=cancer_nomissing)
+fitf = stepAIC(fit0, scope=formula(All_cox), direction="forward", k=2)
+summary(fitf)
+
+cmxxx<-coxph(Surv(cancer_nomissing$time,cancer_nomissing$status)~.,data=cancer_nomissing)
+summary(cmxxx)
+All_cox_back = stepAIC(cmxxx,scope=formula(cmxxx), direction="backward", k=2)
+
+fits = stepAIC(All_cox, direction="both", k=2)
+summary(fits)
+
+```
+Εισάγουμε όλες τις διαθέσιμες μεταβλητές στο μοντέλο.
+Αφαιρούμε τη λιγότερο σημαντική μεταβλητή, δηλαδή αυτήν που η αφαίρεσή της προκαλεί τη μεγαλύτερη μείωση του AIC.
+Προσαρμόζουμε εκ νέου ένα μοντέλο παλινδρόμησης στα δεδομένα, παραλείποντας τη μεταβλητή που αφαιρέσαμε.
+Επαναλαμβάνουμε τα βήματα 2 και 3 μέχρι η αφαίρεση μιας οποιασδήποτε μεταβλητής να έχει ως συνέπεια την αύξηση της τιμής του AIC οπότε και σταματάμε τη διαδικασία.
+
+
+```{r}
+res<- residuals(cmx,type='schoenfeld')
+summary(res)
+```
+```{r}
+(zph1<- cox.zph(All_cox_back,transform = 'identity'))
+ggcoxzph(zph1)
+```
+```{r}
+cancer$cat.karno <- as.factor(ifelse(cancer$ph.karno <= 50, 'A', 
+                                     ifelse(cancer$ph.karno > 50, 'B', NA)))
+
+head(cancer)
+```
+```{r}
+cancer_nomissing<- na.omit(cancer)
+cmxx<-coxph(Surv(cancer_nomissing$time,cancer_nomissing$status)~.,data = cancer_nomissing)
+library(MASS)
+All_cox <- coxph(Surv(cancer_nomissing$time,cancer_nomissing$status) ~ . , data=cancer_nomissing)
+fit0 = coxph(Surv(cancer_nomissing$time, cancer_nomissing$status) ~ 1, data=cancer_nomissing)
+fitf = stepAIC(fit0, scope=formula(All_cox), direction="forward", k=2)
+summary(fitf)
+
+cmxxx<-coxph(Surv(cancer_nomissing$time,cancer_nomissing$status)~.,data=cancer_nomissing)
+summary(cmxxx)
+All_cox_back = stepAIC(cmxxx,scope=formula(cmxxx), direction="backward", k=2)
+
+fits = stepAIC(All_cox, direction="both", k=2)
+summary(fits)
+
+```
+```{r}
+(zph2<- cox.zph(All_cox_back,transform = 'identity'))
+```
+
+```{r}
+ggcoxzph(zph2)
+```
+
+```{r}
+ggcoxdiagnostics(All_cox_back, type = "dfbeta", linear.predictions = F)
+```
+
+
+```{r}
+# Calculate Schoenfeld residuals
+resid_schoenfeld <- residuals(All_cox_back, type = "schoenfeld")
+
+# Print the structure of resid_schoenfeld
+print(str(resid_schoenfeld))
+
+# Print the first few rows of resid_schoenfeld to inspect
+print(head(resid_schoenfeld))
+
+# Find observations with large negative Schoenfeld residuals for the fifth predictor
+large_negative_resid <- which(resid_schoenfeld[,2] > 0.74)
+
+# Print the indices of the large negative residuals
+print(large_negative_resid)
+
+# Check if large_negative_resid is not empty
+if (length(large_negative_resid) > 0) {
+  # Subset the 'cancer' dataset to include only those observations
+  cancer_subset <- cancer[large_negative_resid, ]
+  print(cancer_subset)
+} else {
+  print("No observations with Schoenfeld residuals less than -10 for the fifth predictor.")
+}
+
+summary(resid_schoenfeld[,2])
+```
+```{r}
+View(cancer)
+```
+
+```{r}
+ggcoxdiagnostics(fits, type = 'dfbeta' , linear.predictions = TRUE)
+```
+
+```{r}
+ggcoxdiagnostics(fits, type = "dfbeta",
+                 linear.predictions = FALSE, ggtheme = theme_bw())
+```
+```{r}
+resid_dfbeta <- residuals(fits, type = "dfbeta")
+which(resid_dfbeta[,4]< -0.002)
+lung[which(resid_dfbeta[,4]< -0.002),]
+
+```
+
+
+
+
+
+
+
+
+
+
+
